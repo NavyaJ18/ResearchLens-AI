@@ -1,6 +1,9 @@
 from src.loader import load_pdf
 from src.chunker import chunk_pages
-
+from src.embeddings import (
+    load_embedding_model,
+    create_embeddings
+)
 
 pdf_path = "data/paper/perclos_detection.pdf"
 
@@ -27,6 +30,27 @@ chunk_lengths = [len(chunk["text"]) for chunk in chunks]
 average_length = sum(chunk_lengths) / len(chunk_lengths)
 smallest_chunk = min(chunk_lengths)
 largest_chunk = max(chunk_lengths)
+
+# Step 4: Load embedding model
+print("\n--- LOADING EMBEDDING MODEL ---\n")
+
+model = load_embedding_model()
+
+
+# Step 5: Create embeddings
+print("\n--- CREATING EMBEDDINGS ---\n")
+
+embeddings = create_embeddings(
+    model,
+    chunks
+)
+
+
+# Step 6: Display embedding information
+print("\n--- EMBEDDING INFORMATION ---\n")
+
+print("Number of embeddings:", len(embeddings))
+print("Embedding dimension:", len(embeddings[0]))
 
 
 print("\n--- CHUNK STATISTICS ---\n")
