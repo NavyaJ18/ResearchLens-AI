@@ -8,6 +8,12 @@ from src.search import search_similar_chunks
 
 pdf_path = "data/paper/perclos_detection.pdf"
 
+from src.config import (
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
+    TOP_K_RESULTS
+)
+
 
 # Step 1: Load PDF
 pages = load_pdf(pdf_path)
@@ -18,8 +24,8 @@ print(f"\nTotal pages: {len(pages)}")
 # Step 2: Chunk the document
 chunks = chunk_pages(
     pages,
-    chunk_size=1000,
-    chunk_overlap=200
+   chunk_size=CHUNK_SIZE,
+chunk_overlap=CHUNK_OVERLAP
 )
 
 print(f"Total chunks created: {len(chunks)}")
@@ -73,8 +79,9 @@ results = search_similar_chunks(
     query=query,
     chunks=chunks,
     embeddings=embeddings,
-    top_k=3
+    top_k=TOP_K_RESULTS
 )
+
 
 
 print("\n--- TOP RELEVANT CHUNKS ---\n")
