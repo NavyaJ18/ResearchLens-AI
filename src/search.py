@@ -13,22 +13,39 @@ def search_similar_chunks(
     for a given query.
     """
 
-    # Convert the user's query into an embedding
-    query_embedding = model.encode(query)
+    # Validate query
+    if not query or not query.strip():
+        raise ValueError("Query cannot be empty.")
 
-    # Calculate similarity scores
+    # Validate top_k
+    if top_k <= 0:
+        raise ValueError("top_k must be greater than 0.")
+
+    # Validate available data
+    if len(chunks) == 0:
+        raise ValueError("No document chunks available.")
+
+    # Prevent requesting more results than available
+    top_k = min(top_k, len(chunks))
+
+    # Create normalized query embedding
+    query_embedding = model.encode(
+        query,
+        normalize_embeddings=True
+    )
+
+    # Similarity scores
     scores = np.dot(
         embeddings,
         query_embedding
     )
 
-    # Get indices of highest scoring chunks
+    # Get best matching chunk indices
     top_indices = np.argsort(scores)[-top_k:][::-1]
 
     results = []
 
     for index in top_indices:
-
         results.append({
             "chunk": chunks[index],
             "score": float(scores[index])
