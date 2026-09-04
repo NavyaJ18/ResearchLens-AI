@@ -18,7 +18,7 @@ def load_embedding_model():
 
 def create_embeddings(model, chunks):
     """
-    Converts document chunks into vector embeddings.
+    Converts document chunks into normalized vector embeddings.
     """
 
     texts = [
@@ -26,9 +26,13 @@ def create_embeddings(model, chunks):
         for chunk in chunks
     ]
 
+    if not texts:
+        raise ValueError("No text chunks available for embedding.")
+
     embeddings = model.encode(
         texts,
-        show_progress_bar=True
+        show_progress_bar=True,
+        normalize_embeddings=True
     )
 
     return embeddings
