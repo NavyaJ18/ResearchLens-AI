@@ -4,6 +4,7 @@ from src.embeddings import (
     load_embedding_model,
     create_embeddings
 )
+from src.search import search_similar_chunks
 
 pdf_path = "data/paper/perclos_detection.pdf"
 
@@ -58,6 +59,39 @@ print("\n--- CHUNK STATISTICS ---\n")
 print(f"Average chunk length: {average_length:.2f} characters")
 print(f"Smallest chunk: {smallest_chunk} characters")
 print(f"Largest chunk: {largest_chunk} characters")
+
+# Step 7: Test semantic search
+
+query = "What does PERCLOS measure?"
+
+print("\n--- SEARCH QUERY ---\n")
+print(query)
+
+
+results = search_similar_chunks(
+    model=model,
+    query=query,
+    chunks=chunks,
+    embeddings=embeddings,
+    top_k=3
+)
+
+
+print("\n--- TOP RELEVANT CHUNKS ---\n")
+
+for rank, result in enumerate(results, start=1):
+
+    chunk = result["chunk"]
+
+    print(f"\nResult #{rank}")
+    print(f"Similarity Score: {result['score']:.4f}")
+    print(f"Source: {chunk['source']}")
+    print(f"Page: {chunk['page']}")
+
+    print("\nText:")
+    print(chunk["text"][:700])
+
+    print("\n" + "=" * 60)
 
 
 # Step 4: Display first chunk
