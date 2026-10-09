@@ -3,3 +3,5 @@ CHUNK_OVERLAP = 200
 TOP_K_RESULTS = 3
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+VECTOR_STORE_PATH = "data/chroma_db"
+VECTOR_COLLECTION_NAME = "research_papers"

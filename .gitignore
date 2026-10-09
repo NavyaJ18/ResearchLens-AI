@@ -19,3 +19,6 @@ data/paper/*.pdf
 venv/
 .venv/
 .venv-1/
+
+# Persistent vector database
+data/chroma_db/
