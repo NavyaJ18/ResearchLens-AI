@@ -46,3 +46,14 @@ def recall_at_k(retrieved_ids, relevant_ids, k):
     )
 
     return relevant_retrieved / len(relevant_ids)
+
+def f1_at_k(retrieved_ids, relevant_ids, k):
+    """Calculate F1@K using Precision@K and Recall@K."""
+
+    precision = precision_at_k(retrieved_ids, relevant_ids, k)
+    recall = recall_at_k(retrieved_ids, relevant_ids, k)
+
+    if precision + recall == 0:
+        return 0.0
+
+    return 2 * precision * recall / (precision + recall)

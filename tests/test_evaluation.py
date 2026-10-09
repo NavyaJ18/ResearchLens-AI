@@ -32,3 +32,15 @@ def test_recall_rejects_nonpositive_k():
 
 def test_recall_when_no_chunks_are_retrieved():
     assert recall_at_k([], ["a", "b"], 3) == 0.0
+
+
+from src.evaluation import f1_at_k
+
+
+def test_f1_at_k():
+    result = f1_at_k(
+        ["a", "b", "c"],
+        ["a", "c", "d"],
+        3
+    )
+    assert result == pytest.approx(2 / 3)
