@@ -14,3 +14,8 @@ __pycache__/
 
 # Research paper PDFs
 data/paper/*.pdf
+
+# Virtual environment
+venv/
+.venv/
+.venv-1/
