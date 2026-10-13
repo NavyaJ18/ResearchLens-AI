@@ -1,10 +1,15 @@
 
 import hashlib
+import math
+
 import chromadb
 
 
 def get_or_create_collection(persist_directory, collection_name):
     """Open or create a persistent ChromaDB collection."""
+    if not collection_name or not isinstance(collection_name, str):
+        raise ValueError("Collection name must be a non-empty string.")
+
     client = chromadb.PersistentClient(path=str(persist_directory))
 
     collection = client.get_or_create_collection(
@@ -17,16 +22,66 @@ def get_or_create_collection(persist_directory, collection_name):
 
 def create_chunk_id(chunk):
     """Generate a stable ID for a document chunk."""
+    required_fields = ("text", "source", "page", "chunk_id")
+
+    if not isinstance(chunk, dict):
+        raise ValueError("Chunk must be a dictionary.")
+
+    missing_fields = [
+        field for field in required_fields if field not in chunk
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            f"Chunk is missing required fields: {', '.join(missing_fields)}"
+        )
+
     text = chunk["text"]
     source = chunk["source"]
-    page = int(chunk["page"])
-    chunk_number = int(chunk["chunk_id"])
+
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("Chunk text must be a non-empty string.")
+
+    if not isinstance(source, str) or not source.strip():
+        raise ValueError("Chunk source must be a non-empty string.")
+
+    try:
+        page = int(chunk["page"])
+        chunk_number = int(chunk["chunk_id"])
+    except (TypeError, ValueError):
+        raise ValueError("Page and chunk ID must be integers.") from None
+
+    if page < 1 or chunk_number < 0:
+        raise ValueError(
+            "Page must be positive and chunk ID cannot be negative."
+        )
 
     content_hash = hashlib.sha256(
         text.encode("utf-8")
     ).hexdigest()[:16]
 
     return f"{source}:{page}:{chunk_number}:{content_hash}"
+
+
+def _validate_embedding(embedding, label):
+    """Convert an embedding to a list and validate its numeric values."""
+    if not hasattr(embedding, "tolist"):
+        raise ValueError(f"{label} must support tolist().")
+
+    values = embedding.tolist()
+
+    if not isinstance(values, list) or not values:
+        raise ValueError(f"{label} must be a non-empty one-dimensional vector.")
+
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        for value in values
+    ):
+        raise ValueError(f"{label} must contain only finite numeric values.")
+
+    return values
 
 
 def store_chunks(collection, chunks, embeddings):
@@ -37,8 +92,22 @@ def store_chunks(collection, chunks, embeddings):
     if not chunks:
         return 0
 
+    chunk_ids = [create_chunk_id(chunk) for chunk in chunks]
+    embedding_values = [
+        _validate_embedding(embedding, f"Embedding at index {index}")
+        for index, embedding in enumerate(embeddings)
+    ]
+
+    expected_dimension = len(embedding_values[0])
+
+    if any(
+        len(embedding) != expected_dimension
+        for embedding in embedding_values
+    ):
+        raise ValueError("All embeddings must have the same dimension.")
+
     collection.upsert(
-        ids=[create_chunk_id(chunk) for chunk in chunks],
+        ids=chunk_ids,
         documents=[chunk["text"] for chunk in chunks],
         metadatas=[
             {
@@ -48,7 +117,7 @@ def store_chunks(collection, chunks, embeddings):
             }
             for chunk in chunks
         ],
-        embeddings=[embedding.tolist() for embedding in embeddings],
+        embeddings=embedding_values,
     )
 
     return len(chunks)
@@ -73,12 +142,24 @@ def get_missing_chunks(collection, chunks):
 
 def search_vector_store(collection, query_embedding, top_k=3):
     """Retrieve the most similar chunks from ChromaDB."""
-    if top_k <= 0:
-        raise ValueError("top_k must be greater than 0.")
+    if (
+        not isinstance(top_k, int)
+        or isinstance(top_k, bool)
+        or top_k <= 0
+    ):
+        raise ValueError("top_k must be a positive integer.")
+
+    query_values = _validate_embedding(
+        query_embedding,
+        "Query embedding",
+    )
+
+    if collection.count() == 0:
+        return []
 
     results = collection.query(
-        query_embeddings=[query_embedding.tolist()],
-        n_results=top_k,
+        query_embeddings=[query_values],
+        n_results=min(top_k, collection.count()),
         include=["documents", "metadatas", "distances"],
     )
 
