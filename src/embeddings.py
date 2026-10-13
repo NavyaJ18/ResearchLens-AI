@@ -1,25 +1,21 @@
+
 from sentence_transformers import SentenceTransformer
 
-
-MODEL_NAME = "all-MiniLM-L6-v2"
+from src.config import EMBEDDING_MODEL
 
 
 def load_embedding_model():
-    """
-    Loads and returns the sentence embedding model.
-    """
+    """Load and return the configured sentence embedding model."""
 
-    print(f"Loading embedding model: {MODEL_NAME}")
+    print(f"Loading embedding model: {EMBEDDING_MODEL}")
 
-    model = SentenceTransformer(MODEL_NAME)
+    model = SentenceTransformer(EMBEDDING_MODEL)
 
     return model
 
 
 def create_embeddings(model, chunks):
-    """
-    Converts document chunks into normalized vector embeddings.
-    """
+    """Convert document chunks into normalized vector embeddings."""
 
     texts = [
         chunk["text"]
@@ -32,7 +28,7 @@ def create_embeddings(model, chunks):
     embeddings = model.encode(
         texts,
         show_progress_bar=True,
-        normalize_embeddings=True
+        normalize_embeddings=True,
     )
 
     return embeddings
