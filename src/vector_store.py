@@ -7,17 +7,18 @@ import chromadb
 
 def get_or_create_collection(persist_directory, collection_name):
     """Open or create a persistent ChromaDB collection."""
-    if not collection_name or not isinstance(collection_name, str):
+    if (
+        not isinstance(collection_name, str)
+        or not collection_name.strip()
+    ):
         raise ValueError("Collection name must be a non-empty string.")
 
     client = chromadb.PersistentClient(path=str(persist_directory))
 
-    collection = client.get_or_create_collection(
+    return client.get_or_create_collection(
         name=collection_name,
         metadata={"hnsw:space": "cosine"},
     )
-
-    return collection
 
 
 def create_chunk_id(chunk):
@@ -64,14 +65,16 @@ def create_chunk_id(chunk):
 
 
 def _validate_embedding(embedding, label):
-    """Convert an embedding to a list and validate its numeric values."""
+    """Convert an embedding to a list and validate its values."""
     if not hasattr(embedding, "tolist"):
         raise ValueError(f"{label} must support tolist().")
 
     values = embedding.tolist()
 
     if not isinstance(values, list) or not values:
-        raise ValueError(f"{label} must be a non-empty one-dimensional vector.")
+        raise ValueError(
+            f"{label} must be a non-empty one-dimensional vector."
+        )
 
     if any(
         isinstance(value, bool)
@@ -79,7 +82,9 @@ def _validate_embedding(embedding, label):
         or not math.isfinite(value)
         for value in values
     ):
-        raise ValueError(f"{label} must contain only finite numeric values.")
+        raise ValueError(
+            f"{label} must contain only finite numeric values."
+        )
 
     return values
 
@@ -93,6 +98,7 @@ def store_chunks(collection, chunks, embeddings):
         return 0
 
     chunk_ids = [create_chunk_id(chunk) for chunk in chunks]
+
     embedding_values = [
         _validate_embedding(embedding, f"Embedding at index {index}")
         for index, embedding in enumerate(embeddings)
@@ -140,8 +146,13 @@ def get_missing_chunks(collection, chunks):
     ]
 
 
-def search_vector_store(collection, query_embedding, top_k=3):
-    """Retrieve the most similar chunks from ChromaDB."""
+def search_vector_store(
+    collection,
+    query_embedding,
+    top_k=3,
+    min_similarity=None,
+):
+    """Retrieve similar chunks and optionally filter weak matches."""
     if (
         not isinstance(top_k, int)
         or isinstance(top_k, bool)
@@ -149,17 +160,30 @@ def search_vector_store(collection, query_embedding, top_k=3):
     ):
         raise ValueError("top_k must be a positive integer.")
 
+    if min_similarity is not None:
+        if (
+            isinstance(min_similarity, bool)
+            or not isinstance(min_similarity, (int, float))
+            or not math.isfinite(min_similarity)
+            or not -1.0 <= min_similarity <= 1.0
+        ):
+            raise ValueError(
+                "min_similarity must be a finite number between -1 and 1."
+            )
+
     query_values = _validate_embedding(
         query_embedding,
         "Query embedding",
     )
 
-    if collection.count() == 0:
+    total_chunks = collection.count()
+
+    if total_chunks == 0:
         return []
 
     results = collection.query(
         query_embeddings=[query_values],
-        n_results=min(top_k, collection.count()),
+        n_results=min(top_k, total_chunks),
         include=["documents", "metadatas", "distances"],
     )
 
@@ -171,6 +195,13 @@ def search_vector_store(collection, query_embedding, top_k=3):
     for i, chunk_id in enumerate(results["ids"][0]):
         metadata = results["metadatas"][0][i]
         distance = results["distances"][0][i]
+        similarity_score = 1.0 - distance
+
+        if (
+            min_similarity is not None
+            and similarity_score < min_similarity
+        ):
+            continue
 
         retrieved.append(
             {
@@ -180,7 +211,7 @@ def search_vector_store(collection, query_embedding, top_k=3):
                     "page": metadata["page"],
                     "chunk_id": metadata["chunk_id"],
                 },
-                "score": 1.0 - distance,
+                "score": similarity_score,
                 "id": chunk_id,
             }
         )

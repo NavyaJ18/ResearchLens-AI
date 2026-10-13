@@ -1,7 +1,6 @@
 
 import numpy as np
 import pytest
-import chromadb
 
 from src.vector_store import (
     create_chunk_id,
@@ -14,7 +13,7 @@ from src.vector_store import (
 
 @pytest.fixture
 def collection(tmp_path):
-    """Create an isolated temporary ChromaDB collection for each test."""
+    """Create an isolated temporary ChromaDB collection."""
     return get_or_create_collection(
         persist_directory=tmp_path / "test_chroma_db",
         collection_name="test_collection",
@@ -23,7 +22,7 @@ def collection(tmp_path):
 
 @pytest.fixture
 def sample_chunk():
-    """Provide a valid document chunk."""
+    """Return a valid document chunk."""
     return {
         "text": "PERCLOS measures the percentage of time the eyes are closed.",
         "source": "test_paper.pdf",
@@ -34,17 +33,15 @@ def sample_chunk():
 
 @pytest.fixture
 def sample_embedding():
-    """Provide a normalized embedding for testing."""
+    """Return a normalized three-dimensional embedding."""
     return np.array([1.0, 0.0, 0.0], dtype=np.float32)
 
 
 def test_create_chunk_id_is_stable(sample_chunk):
-    """The same chunk should always produce the same ID."""
     assert create_chunk_id(sample_chunk) == create_chunk_id(sample_chunk)
 
 
 def test_create_chunk_id_changes_with_text(sample_chunk):
-    """Changing chunk text should change its ID."""
     original_id = create_chunk_id(sample_chunk)
 
     modified_chunk = sample_chunk.copy()
@@ -54,13 +51,11 @@ def test_create_chunk_id_changes_with_text(sample_chunk):
 
 
 def test_create_chunk_id_rejects_missing_fields():
-    """Malformed chunks should raise a clear validation error."""
     with pytest.raises(ValueError, match="missing required fields"):
         create_chunk_id({"text": "Some text"})
 
 
 def test_create_chunk_id_rejects_empty_text(sample_chunk):
-    """Empty chunk text should not be accepted."""
     invalid_chunk = sample_chunk.copy()
     invalid_chunk["text"] = "   "
 
@@ -71,11 +66,8 @@ def test_create_chunk_id_rejects_empty_text(sample_chunk):
 def test_store_chunks_and_count(
     collection, sample_chunk, sample_embedding
 ):
-    """Storing a chunk should increase the collection count."""
     stored = store_chunks(
-        collection,
-        [sample_chunk],
-        [sample_embedding],
+        collection, [sample_chunk], [sample_embedding]
     )
 
     assert stored == 1
@@ -85,26 +77,32 @@ def test_store_chunks_and_count(
 def test_store_chunks_rejects_mismatched_embeddings(
     collection, sample_chunk
 ):
-    """Each chunk must have a matching embedding."""
     with pytest.raises(ValueError, match="one embedding"):
         store_chunks(collection, [sample_chunk], [])
+
+
+def test_store_chunks_rejects_non_finite_embeddings(
+    collection, sample_chunk
+):
+    invalid_embedding = np.array([1.0, np.nan, 0.0])
+
+    with pytest.raises(ValueError, match="finite numeric values"):
+        store_chunks(
+            collection, [sample_chunk], [invalid_embedding]
+        )
 
 
 def test_get_missing_chunks_detects_stored_chunks(
     collection, sample_chunk, sample_embedding
 ):
-    """Stored chunks should not be reported as missing."""
     store_chunks(collection, [sample_chunk], [sample_embedding])
 
-    missing = get_missing_chunks(collection, [sample_chunk])
-
-    assert missing == []
+    assert get_missing_chunks(collection, [sample_chunk]) == []
 
 
 def test_get_missing_chunks_finds_new_chunks(
     collection, sample_chunk, sample_embedding
 ):
-    """Chunks not yet stored should be reported as missing."""
     store_chunks(collection, [sample_chunk], [sample_embedding])
 
     new_chunk = sample_chunk.copy()
@@ -112,8 +110,7 @@ def test_get_missing_chunks_finds_new_chunks(
     new_chunk["text"] = "A new passage from the paper."
 
     missing = get_missing_chunks(
-        collection,
-        [sample_chunk, new_chunk],
+        collection, [sample_chunk, new_chunk]
     )
 
     assert len(missing) == 1
@@ -123,13 +120,10 @@ def test_get_missing_chunks_finds_new_chunks(
 def test_search_returns_relevant_chunk(
     collection, sample_chunk, sample_embedding
 ):
-    """Search should return the stored chunk and its metadata."""
     store_chunks(collection, [sample_chunk], [sample_embedding])
 
     results = search_vector_store(
-        collection,
-        query_embedding=sample_embedding,
-        top_k=1,
+        collection, query_embedding=sample_embedding, top_k=1
     )
 
     assert len(results) == 1
@@ -140,7 +134,6 @@ def test_search_returns_relevant_chunk(
 
 
 def test_search_returns_empty_for_empty_collection(collection):
-    """Searching an empty collection should return no results."""
     results = search_vector_store(
         collection,
         query_embedding=np.array([1.0, 0.0, 0.0]),
@@ -152,7 +145,6 @@ def test_search_returns_empty_for_empty_collection(collection):
 
 @pytest.mark.parametrize("invalid_top_k", [0, -1, 1.5, True])
 def test_search_rejects_invalid_top_k(collection, invalid_top_k):
-    """Search result count must be a positive integer."""
     with pytest.raises(ValueError, match="positive integer"):
         search_vector_store(
             collection,
@@ -161,15 +153,61 @@ def test_search_rejects_invalid_top_k(collection, invalid_top_k):
         )
 
 
-def test_store_chunks_rejects_non_finite_embeddings(
+def test_search_filters_results_below_similarity_threshold(
     collection, sample_chunk
 ):
-    """Embeddings containing NaN should be rejected."""
-    invalid_embedding = np.array([1.0, np.nan, 0.0])
+    """A lower-similarity chunk should be excluded by the threshold."""
+    embeddings = [
+        np.array([1.0, 0.0, 0.0], dtype=np.float32),
+        np.array([0.0, 1.0, 0.0], dtype=np.float32),
+    ]
 
-    with pytest.raises(ValueError, match="finite numeric values"):
-        store_chunks(
+    second_chunk = sample_chunk.copy()
+    second_chunk["chunk_id"] = 1
+    second_chunk["text"] = "A different passage about another topic."
+
+    store_chunks(
+        collection,
+        [sample_chunk, second_chunk],
+        embeddings,
+    )
+
+    results = search_vector_store(
+        collection,
+        query_embedding=embeddings[0],
+        top_k=2,
+        min_similarity=0.8,
+    )
+
+    assert len(results) == 1
+    assert results[0]["chunk"]["chunk_id"] == 0
+    assert results[0]["score"] >= 0.8
+
+
+def test_search_without_threshold_preserves_results(
+    collection, sample_chunk, sample_embedding
+):
+    store_chunks(collection, [sample_chunk], [sample_embedding])
+
+    results = search_vector_store(
+        collection,
+        query_embedding=sample_embedding,
+        top_k=3,
+    )
+
+    assert len(results) == 1
+
+
+@pytest.mark.parametrize(
+    "invalid_threshold",
+    [True, float("nan"), 1.1, -1.1, "0.5"],
+)
+def test_search_rejects_invalid_similarity_threshold(
+    collection, invalid_threshold
+):
+    with pytest.raises(ValueError, match="min_similarity"):
+        search_vector_store(
             collection,
-            [sample_chunk],
-            [invalid_embedding],
+            query_embedding=np.array([1.0, 0.0, 0.0]),
+            min_similarity=invalid_threshold,
         )
