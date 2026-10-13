@@ -105,7 +105,10 @@ print("Embedding dimension:",
 
 
 # Step 8: Perform semantic search through ChromaDB
-query = "What does PERCLOS measure?"
+query = input("\nEnter your research question: ").strip()
+
+if not query:
+    raise ValueError("Research question cannot be empty.")
 
 print("\n--- SEARCH QUERY ---\n")
 print(query)
@@ -117,10 +120,12 @@ query_embedding = model.encode(
 
 results = search_vector_store(
     collection=collection,
-    query_embedding=query_embedding,
+    query_embedding=model.encode(
+        query,
+        normalize_embeddings=True,
+    ),
     top_k=TOP_K_RESULTS,
 )
-
 
 # Step 9: Display search results
 print("\n--- TOP RELEVANT CHUNKS ---\n")
