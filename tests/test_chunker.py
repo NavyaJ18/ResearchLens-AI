@@ -92,3 +92,55 @@ def test_skips_empty_pages():
 
     assert len(chunks) == 1
     assert chunks[0]["page"] == 2
+
+
+from src.chunker import chunk_pages
+
+
+def test_chunking_preserves_text_with_configured_overlap():
+    original_text = "ABCDEFGHIJKL"
+    pages = [
+        {
+            "text": original_text,
+            "page": 1,
+            "source": "paper.pdf",
+        }
+    ]
+
+    chunks = chunk_pages(
+        pages,
+        chunk_size=5,
+        chunk_overlap=2,
+    )
+
+    assert [chunk["text"] for chunk in chunks] == [
+        "ABCDE",
+        "DEFGH",
+        "GHIJK",
+        "JKL",
+    ]
+
+    reconstructed = chunks[0]["text"] + "".join(
+        chunk["text"][2:] for chunk in chunks[1:]
+    )
+
+    assert reconstructed == original_text
+
+
+def test_chunking_short_text_creates_one_chunk():
+    pages = [
+        {
+            "text": "Short text",
+            "page": 1,
+            "source": "paper.pdf",
+        }
+    ]
+
+    chunks = chunk_pages(
+        pages,
+        chunk_size=100,
+        chunk_overlap=20,
+    )
+
+    assert len(chunks) == 1
+    assert chunks[0]["text"] == "Short text"
