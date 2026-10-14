@@ -1,25 +1,44 @@
-import pymupdf
+
 from pathlib import Path
+
+import pymupdf
 
 
 def load_pdf(pdf_path):
-    """
-    Reads a PDF and extracts text page by page.
-    """
+    """Extract text page by page from a PDF file."""
 
-    document = pymupdf.open(pdf_path)
+    path = Path(pdf_path)
 
-    pages = []
+    if not path.exists():
+        raise FileNotFoundError(f"PDF file not found: {path}")
 
-    for page_number, page in enumerate(document):
-        text = page.get_text()
+    if not path.is_file():
+        raise ValueError(f"PDF path is not a file: {path}")
 
-        pages.append({
-            "text": text,
-            "page": page_number + 1,
-            "source": Path(pdf_path).name
-        })
+    if path.suffix.lower() != ".pdf":
+        raise ValueError(f"Expected a PDF file, got: {path.name}")
 
-    document.close()
+    try:
+        with pymupdf.open(path) as document:
+            if document.is_encrypted:
+                raise ValueError(f"PDF is encrypted: {path.name}")
 
-    return pages
+            pages = []
+
+            for page_number, page in enumerate(document, start=1):
+                pages.append(
+                    {
+                        "text": page.get_text(),
+                        "page": page_number,
+                        "source": path.name,
+                    }
+                )
+
+            return pages
+
+    except (FileNotFoundError, ValueError):
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to read PDF '{path.name}': {exc}"
+        ) from exc
