@@ -1,4 +1,7 @@
 
+import math
+
+
 def format_search_results(results):
     """Format semantic search results for readable terminal output."""
 
@@ -8,6 +11,9 @@ def format_search_results(results):
     output = []
 
     for rank, result in enumerate(results, start=1):
+        if not isinstance(result, dict):
+            continue
+
         chunk = result.get("chunk", {})
         score = result.get("score")
 
@@ -19,7 +25,7 @@ def format_search_results(results):
         except (TypeError, ValueError):
             continue
 
-        if not 0.0 <= score <= 1.0:
+        if not math.isfinite(score) or not 0.0 <= score <= 1.0:
             continue
 
         source = chunk.get("source", "Unknown source")
