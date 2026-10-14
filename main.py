@@ -1,4 +1,4 @@
-
+from src.query_validator import validate_query
 from src.loader import load_pdf
 from src.chunker import chunk_pages
 from src.embeddings import (
@@ -105,10 +105,9 @@ print("Embedding dimension:",
 
 
 # Step 8: Perform semantic search through ChromaDB
-query = input("\nEnter your research question: ").strip()
-
-if not query:
-    raise ValueError("Research question cannot be empty.")
+query = validate_query(
+    input("\nEnter your research question: ")
+)
 
 print("\n--- SEARCH QUERY ---\n")
 print(query)
@@ -120,12 +119,10 @@ query_embedding = model.encode(
 
 results = search_vector_store(
     collection=collection,
-    query_embedding=model.encode(
-        query,
-        normalize_embeddings=True,
-    ),
+    query_embedding=query_embedding,
     top_k=TOP_K_RESULTS,
 )
+
 
 # Step 9: Display search results
 print("\n--- TOP RELEVANT CHUNKS ---\n")
